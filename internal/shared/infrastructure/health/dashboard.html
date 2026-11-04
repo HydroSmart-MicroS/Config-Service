@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Estado de servicios · HydroSmart</title>
+  <link rel="stylesheet" href="/status/dashboard.css">
+  <script src="/status/dashboard.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/">◒ <span>HYDROSMART</span></a><span class="environment">LOCAL · Config Service</span></header>
+  <main>
+    <div class="heading">
+      <div><p class="eyebrow">MONITOREO DEL SISTEMA</p><h1>Estado de microservicios</h1><p class="intro">Comprueba qué funciona y dónde hay una interrupción.</p></div>
+      <div class="controls"><label><input id="automatic" type="checkbox" checked> Actualizar cada 15 s</label><button id="refresh" type="button">Actualizar ahora</button></div>
+    </div>
+    <section class="overview" aria-label="Resumen del sistema">
+      <div><p class="eyebrow">ESTADO GENERAL</p><h2 id="overall">Comprobando servicios…</h2><p id="summary" role="status" aria-live="polite">Consultando salud y dependencias.</p></div>
+      <div class="timestamp"><span>Última comprobación</span><strong id="checked">Todavía sin datos</strong><span id="refresh-state">Ocho servicios y API Gateway</span></div>
+    </section>
+    <p id="error" class="error" role="alert" hidden></p>
+    <noscript><p class="error">Activa JavaScript para consultar y actualizar el estado de los servicios.</p></noscript>
+    <div id="services" class="services" aria-label="Servicios"></div>
+    <section class="guide" aria-labelledby="guide-title">
+      <h2 id="guide-title">Cómo leer este panel</h2>
+      <div class="guide-grid">
+        <p><strong>Operativo</strong>El proceso y sus dependencias requeridas responden correctamente.</p>
+        <p><strong>Con problemas</strong>El servicio responde, pero una comprobación falló. Abre sus detalles para identificar la dependencia.</p>
+        <p><strong>Sin respuesta</strong>No fue posible conectar dentro de 5 segundos. El servicio puede estar apagado o inaccesible.</p>
+      </div>
+      <p class="note">«Proceso» corresponde a liveness; «Listo para trabajar», a readiness. El Gateway comprueba solo su propio proceso. Estas consultas no validan pagos, correos ni la entrega de eventos concretos.</p>
+    </section>
+    <footer><span>Consulta de salud · solo lectura · sin historial</span><a href="/status/services">Ver respuesta JSON</a></footer>
+  </main>
+  <template id="service-template">
+    <article class="service">
+      <div class="service-heading"><h2></h2><span class="badge"></span></div>
+      <p class="service-description"></p>
+      <dl class="checks"><div><dt>Proceso</dt><dd class="live"></dd></div><div><dt>Listo para trabajar</dt><dd class="ready"></dd></div></dl>
+      <div class="dependencies" aria-label="Dependencias"></div>
+      <details><summary>Ver detalles</summary><p class="endpoint"></p><ul class="component-details"></ul><p class="diagnostic"></p></details>
+      <div class="service-footer"><span class="duration"></span><span class="http"></span></div>
+    </article>
+  </template>
+</body>
+</html>

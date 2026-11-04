@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+!.env.example
+.local
+node_modules
+dist
+target
+.venv
+__pycache__
+**/__pycache__

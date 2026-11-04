@@ -1,0 +1,8 @@
+{
+  "MONGODB_DATABASE": "hs_telemetry",
+  "JWT_ISSUER": "http://localhost:8080",
+  "JWKS_URL": "http://identity:8080/api/auth/jwks",
+  "JWT_AUDIENCE": "hydrosmart-api",
+  "PROPERTIES_INTERNAL_URL": "http://properties:8080",
+  "MQTT_BROKER_URL": "tcp://mosquitto:1883"
+}

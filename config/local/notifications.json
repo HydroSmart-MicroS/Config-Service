@@ -1,0 +1,5 @@
+{
+  "JWT_ISSUER": "http://localhost:8080",
+  "JWKS_URL": "http://identity:8080/api/auth/jwks",
+  "JWT_AUDIENCE": "hydrosmart-api"
+}

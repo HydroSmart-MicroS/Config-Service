@@ -1,0 +1,9 @@
+{
+  "IDENTITY_UPSTREAM": "identity:8080",
+  "PROPERTIES_UPSTREAM": "properties:8080",
+  "TELEMETRY_UPSTREAM": "telemetry:8080",
+  "ANALYTICS_UPSTREAM": "analytics:8080",
+  "REPORTS_UPSTREAM": "reports:8080",
+  "NOTIFICATIONS_UPSTREAM": "notifications:8080",
+  "BILLING_UPSTREAM": "billing:8080"
+}

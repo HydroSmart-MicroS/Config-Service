@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+target/
+.venv/
+__pycache__/
+*.pyc
+*.pem
+*.key
+.local/
+.idea/
+.vscode/
