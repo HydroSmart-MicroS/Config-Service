@@ -9,3 +9,11 @@ target
 .venv
 __pycache__
 **/__pycache__
+
+# Never send environment files or credentials to the Docker builder.
+**/.env*
+**/*.env*
+**/*.pem
+**/*.key
+**/.git
+**/.local

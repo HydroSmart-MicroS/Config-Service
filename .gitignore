@@ -12,3 +12,8 @@ __pycache__/
 .local/
 .idea/
 .vscode/
+
+# Private environment files and local credentials
+.env*
+*.env*
+!.env.example
