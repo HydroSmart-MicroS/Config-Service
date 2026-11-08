@@ -1,0 +1,70 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "HydroSmart config-service review API",
+    "version": "1.0.0",
+    "description": "Local diagnostic endpoint. HTTP 200 can include unavailable components."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8098"
+    }
+  ],
+  "paths": {
+    "/status/services": {
+      "get": {
+        "summary": "Read the local status dashboard snapshot",
+        "description": "Representative operation. The example is synthetic and shows selected fields.",
+        "responses": {
+          "200": {
+            "description": "Successful query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "checkedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "services": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "status": "UP",
+                  "checkedAt": "2026-11-05T20:05:34Z",
+                  "services": [
+                    {
+                      "id": "telemetry",
+                      "name": "Telemetry · IoT",
+                      "endpoint": "/health/ready",
+                      "basic": false,
+                      "readiness": {
+                        "status": "UP",
+                        "httpStatus": 200,
+                        "durationMs": 2
+                      },
+                      "liveness": {
+                        "status": "UP",
+                        "httpStatus": 200,
+                        "durationMs": 1
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
