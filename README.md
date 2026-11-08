@@ -28,3 +28,7 @@ El puerto 8098 está publicado solo en 127.0.0.1 en `compose.local.yaml`; no hac
 el perfil de demostración ni publicar los puertos de los otros servicios para usar el panel.
 
 [Arranque y funciones](../README.md) · [Colas](../docs/rabbitmq-guide.md).
+
+## Acceso al panel en MAIN
+
+Con Neon y Atlas, abre [Config Service](http://127.0.0.1:8099/) o el [acceso local desde Gateway](http://localhost:8081/status). Ambos muestran el estado de nueve componentes. El JSON de esta vista está en `/status/services`. Para verificar la configuración y las dependencias de los servicios juntos, ejecuta `./scripts/Test-Local.ps1 -DatabaseMode Hosted` desde la carpeta de orquestación.
