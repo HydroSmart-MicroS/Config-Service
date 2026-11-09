@@ -5,14 +5,22 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"sync"
 	"time"
 )
 
-//go:embed dashboard.html dashboard.css dashboard.js
+//go:embed dashboard.html dashboard-login.html dashboard.css dashboard.js
 var dashboardFiles embed.FS
+var dashboardPages = template.Must(template.ParseFS(dashboardFiles, "dashboard.html", "dashboard-login.html"))
+
+func renderStatusLogin(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_ = dashboardPages.ExecuteTemplate(w, "dashboard-login.html", message)
+}
 
 type dashboardTarget struct {
 	ID, Name, URL, Ready, Live string
@@ -53,6 +61,7 @@ type dashboardSnapshot struct {
 type Dashboard struct {
 	client  *http.Client
 	targets []dashboardTarget
+	sessions *statusSessions
 }
 
 func NewDashboard() *Dashboard {
@@ -81,7 +90,14 @@ func (d *Dashboard) Register(mux *http.ServeMux) {
 func (d *Dashboard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
+	if d.sessions == nil && r.Header.Get("X-Hydrosmart-Status-Session") == "1" {
+		http.Error(w, "Panel no disponible", http.StatusServiceUnavailable)
+		return
+	}
+	if d.sessions != nil && d.sessions.handle(w, r) {
+		return
+	}
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", "GET")
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -95,6 +111,9 @@ func (d *Dashboard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	file, contentType := "dashboard.html", "text/html; charset=utf-8"
 	switch r.URL.Path {
 	case "/", "/status", "/status/":
+		w.Header().Set("Content-Type", contentType)
+		_ = dashboardPages.ExecuteTemplate(w, "dashboard.html", d.sessions != nil)
+		return
 	case "/status/dashboard.css":
 		file, contentType = "dashboard.css", "text/css; charset=utf-8"
 	case "/status/dashboard.js":

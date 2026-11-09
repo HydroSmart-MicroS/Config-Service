@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acceso al panel · HydroSmart</title>
+  <link rel="stylesheet" href="/status/dashboard.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/">◒ <span>HYDROSMART</span></a></header>
+  <main class="panel-login">
+    <p class="eyebrow">MONITOREO DEL SISTEMA</p>
+    <h1>Acceso al panel</h1>
+    <p class="intro">Usa las credenciales del panel de estado.</p>
+    {{if .}}<p class="error" role="status">{{.}}</p>{{end}}
+    <form action="/status/login" method="post">
+      <label>Usuario <input name="username" autocomplete="username" required autofocus></label>
+      <label>Contraseña <input type="password" name="password" autocomplete="current-password" maxlength="72" required></label>
+      <button type="submit">Ingresar</button>
+    </form>
+  </main>
+</body>
+</html>
