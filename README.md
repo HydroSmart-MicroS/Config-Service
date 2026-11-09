@@ -32,13 +32,3 @@ el perfil de demostración ni publicar los puertos de los otros servicios para u
 ## Acceso al panel en MAIN
 
 Con Neon y Atlas, abre [Config Service](http://127.0.0.1:8099/) o el [acceso local desde Gateway](http://localhost:8081/status). Ambos muestran el estado de nueve componentes. El JSON de esta vista está en `/status/services`. Para verificar la configuración y las dependencias de los servicios juntos, ejecuta `./scripts/Test-Local.ps1 -DatabaseMode Hosted` desde la carpeta de orquestación.
-
-## Sesión del panel en producción
-
-Configura STATUS_PUBLIC_ORIGIN con el origen HTTPS exacto del Gateway y
-STATUS_PASSWORD_HASH con el hash bcrypt de la contraseña de monitor. Guarda
-el hash en el gestor de secretos del despliegue. El Gateway solo reenvía
-las rutas del panel y reemplaza las cabeceras de sesión y de IP del cliente.
-
-La sesión caduca tras 10 minutos de inactividad. Las consultas automáticas
-de estado son pasivas. «Cerrar sesión» revoca la cookie en Config Service.

@@ -42,13 +42,7 @@ func main() {
 	}
 	var rpcState atomic.Pointer[messaging.Server]
 	mux := http.NewServeMux()
-	dashboard := health.NewDashboard()
-	if origin := os.Getenv("STATUS_PUBLIC_ORIGIN"); origin != "" {
-		if err := dashboard.RequireSession(origin, os.Getenv("STATUS_PASSWORD_HASH")); err != nil {
-			log.Fatal(err)
-		}
-	}
-	dashboard.Register(mux)
+	health.NewDashboard().Register(mux)
 	mux.Handle("/health/", health.Controller{Service: "config-service", Checks: map[string]health.Probe{
 		"configuration": func(context.Context) (map[string]any, error) {
 			if len(configs) != 8 {

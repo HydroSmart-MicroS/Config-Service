@@ -10,42 +10,6 @@ const descriptions = {
 const componentNames = { database: 'Base de datos', rabbitmq: 'RabbitMQ', mqtt: 'MQTT', configuration: 'Configuración' };
 const get = id => document.getElementById(id);
 let busy = false;
-let ending = false, idleUntil = 0, idleTimer, activityTimer, nextActivity = 0;
-const hasSession = Boolean(get('status-logout'));
-
-function endSession() {
-  ending = true;
-  get('services').replaceChildren();
-  location.replace('/status/login?expired=1');
-}
-
-function trackIdle(response, started) {
-  if (!hasSession) return;
-  const remaining = response.headers.get('X-Status-Idle-Ms');
-  if (remaining === null) return;
-  const deadline = started + Number(remaining);
-  if (deadline <= idleUntil) return;
-  idleUntil = deadline;
-  clearTimeout(idleTimer);
-  idleTimer = setTimeout(endSession, Math.max(0, deadline - Date.now()));
-}
-
-function noteActivity(event) {
-  if (!event.isTrusted || ending || document.hidden || activityTimer) return;
-  activityTimer = setTimeout(async () => {
-    activityTimer = undefined;
-    if (ending || document.hidden) return;
-    const started = Date.now();
-    nextActivity = started + 5000;
-    try {
-      const response = await fetch('/status/activity', { method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(8000) });
-      if (response.status === 401) endSession();
-      else if (response.ok) trackIdle(response, started);
-    } catch {
-      // The last confirmed idle deadline still applies during a connection error.
-    }
-  }, Math.max(0, nextActivity - Date.now()));
-}
 
 function render(snapshot) {
   const openDetails = new Set([...document.querySelectorAll('.service details[open]')].map(item => item.closest('.service').id));
@@ -92,20 +56,14 @@ function render(snapshot) {
 }
 
 async function refresh() {
-  if (busy || ending) return;
+  if (busy) return;
   busy = true;
   get('refresh').disabled = true;
   get('refresh').textContent = 'Comprobando…';
   get('refresh-state').textContent = 'Consultando los servicios…';
   try {
-    const started = Date.now();
     const response = await fetch('/status/services', { cache: 'no-store', signal: AbortSignal.timeout(8000) });
-    if (hasSession && response.status === 401) {
-      endSession();
-      return;
-    }
     if (!response.ok) throw new Error('No se pudo consultar Config Service');
-    trackIdle(response, started);
     const snapshot = await response.json();
     if (!Array.isArray(snapshot.services) || !snapshot.services.length) throw new Error('Respuesta incompleta');
     render(snapshot);
@@ -124,17 +82,6 @@ async function refresh() {
   }
 }
 
-if (hasSession) {
-  for (const type of ['pointerdown', 'pointermove', 'keydown', 'wheel']) {
-    document.addEventListener(type, noteActivity, { passive: true });
-  }
-  window.addEventListener('pageshow', event => {
-    if (event.persisted) {
-      get('services').replaceChildren();
-      refresh();
-    }
-  });
-}
 get('refresh').addEventListener('click', refresh);
 get('automatic').addEventListener('change', () => {
   get('refresh-state').textContent = get('automatic').checked ? 'Actualización automática cada 15 s' : 'Actualización automática pausada';

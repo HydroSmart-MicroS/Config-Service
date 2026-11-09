@@ -8,10 +8,7 @@
   <script src="/status/dashboard.js" defer></script>
 </head>
 <body>
-  <header class="topbar"><a class="brand" href="/">◒ <span>HYDROSMART</span></a><div class="topbar-actions">
-      <span class="environment">Config Service</span>
-      {{if .}}<form id="status-logout" action="/status/logout" method="post"><button type="submit">Cerrar sesión</button></form>{{end}}
-    </div></header>
+  <header class="topbar"><a class="brand" href="/">◒ <span>HYDROSMART</span></a><span class="environment">LOCAL · Config Service</span></header>
   <main>
     <div class="heading">
       <div><p class="eyebrow">MONITOREO DEL SISTEMA</p><h1>Estado de microservicios</h1><p class="intro">Comprueba qué funciona y dónde hay una interrupción.</p></div>
