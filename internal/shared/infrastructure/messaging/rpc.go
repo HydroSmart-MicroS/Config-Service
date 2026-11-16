@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -30,7 +31,37 @@ type Response struct {
 	Headers map[string]string `json:"headers"`
 	Body    string            `json:"body"`
 }
-type Transport struct{ URL string }
+type Transport struct {
+	URL        string
+	mu         sync.Mutex
+	connection *amqp.Connection
+	closed     bool
+}
+
+func (t *Transport) outbound() (*amqp.Connection, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return nil, errors.New("broker client closed")
+	}
+	if t.connection == nil || t.connection.IsClosed() {
+		connection, err := dial(t.URL)
+		if err != nil {
+			return nil, err
+		}
+		t.connection = connection
+	}
+	return t.connection, nil
+}
+func (t *Transport) Close() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.closed = true
+	if t.connection != nil && !t.connection.IsClosed() {
+		return t.connection.Close()
+	}
+	return nil
+}
 
 func NewTransport() *Transport { return &Transport{URL: os.Getenv("RABBITMQ_URL")} }
 func (t *Transport) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -57,7 +88,7 @@ func (t *Transport) RoundTrip(r *http.Request) (*http.Response, error) {
 		deadline = d
 	}
 	request := Request{Method: r.Method, Path: r.URL.RequestURI(), Headers: headers, Body: base64.StdEncoding.EncodeToString(body), Deadline: deadline.UnixMilli()}
-	result, err := Call(r.Context(), t.URL, service, request)
+	result, err := t.call(r.Context(), service, request)
 	if err != nil {
 		return nil, err
 	}
@@ -81,22 +112,24 @@ func allowedService(name string) bool {
 func dial(address string) (*amqp.Connection, error) {
 	return amqp.DialConfig(address, amqp.Config{Heartbeat: 30 * time.Second, Dial: amqp.DefaultDial(4 * time.Second)})
 }
-func Call(ctx context.Context, address, service string, request Request) (Response, error) {
+func (t *Transport) call(ctx context.Context, service string, request Request) (Response, error) {
 	var result Response
-	if !allowedService(service) || address == "" {
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
+	if !allowedService(service) || t.URL == "" {
 		return result, errors.New("broker configuration unavailable")
 	}
-	connection, err := dial(address)
+	connection, err := t.outbound()
 	if err != nil {
 		return result, err
 	}
-	defer connection.Close()
 	channel, err := connection.Channel()
 	if err != nil {
 		return result, err
 	}
 	defer channel.Close()
-	queue, err := channel.QueueDeclare("", false, true, true, false, nil)
+	queue, err := channel.QueueDeclare("", false, true, true, false, amqp.Table{"x-expires": int32(30000)})
 	if err != nil {
 		return result, err
 	}
