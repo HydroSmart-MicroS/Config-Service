@@ -9,20 +9,19 @@ El servicio atiende RPC y su HTTP interno de salud; las rutas de configuración 
 ## Panel local de estado
 
 Abre http://127.0.0.1:8098/ o `/status`. Consulta los siete microservicios de negocio,
-el propio Config Service y el Gateway, con actualización cada 15 segundos y botón manual.
-Muestra proceso (liveness), disponibilidad (readiness), dependencias, duración y fecha.
+el propio Config Service y el Gateway. El navegador se actualiza cada segundo y permite pausar o consultar manualmente.
+El panel muestra la línea de tiempo de los últimos 15 minutos, además del diagnóstico de proceso (liveness), disponibilidad (readiness) y dependencias.
+Con NOTIFICATIONS_REPLICA_ENABLED=true, Notifications mantiene su estado agregado y muestra las filas de la VM principal y la réplica por separado.
 Una dependencia caída aparece como problema; un servicio inaccesible, como «Sin respuesta».
 El Gateway solo tiene comprobación de proceso y se indica expresamente.
 
 El JSON agregado está en `/status/services` (HTTP 200 para una consulta del panel correcta;
-su campo `status` es DOWN si alguna comprobación falla). `/health/ready` conserva la salud
+su campo `status` indica UP, DEGRADED o DOWN). Añade `?history=1` para incluir la línea de tiempo. `/health/ready` conserva la salud
 propia de Config Service: la caída de otro microservicio no cambia ese endpoint.
 
 Las consultas de diagnóstico usan HTTP directo dentro de Docker, para poder seguir mostrando
 las demás dependencias si RabbitMQ falla. La comunicación de negocio por RabbitMQ se conserva.
-Destinos fijos, consultas paralelas de solo lectura con límite de 5 segundos, sin secretos,
-sin historial, sin pagos ni correos reales. Si Config Service no responde, la página avisa
-que los resultados anteriores ya no confirman el estado actual.
+Config Service comparte un muestreo de solo lectura entre todos los navegadores. Lo intenta cada segundo y espera hasta 5 segundos por comprobación sin superponer ciclos. La línea de tiempo se guarda en memoria y se reinicia con el proceso. El porcentaje se calcula solo con muestras confirmadas. Si el panel deja de responder, conserva la última comprobación recibida y avisa que el estado actual no está confirmado.
 
 El puerto 8098 está publicado solo en 127.0.0.1 en `compose.local.yaml`; no hace falta
 el perfil de demostración ni publicar los puertos de los otros servicios para usar el panel.

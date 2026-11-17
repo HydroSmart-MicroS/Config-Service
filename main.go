@@ -42,7 +42,8 @@ func main() {
 	}
 	var rpcState atomic.Pointer[messaging.Server]
 	mux := http.NewServeMux()
-	health.NewDashboard().Register(mux)
+	dashboard := health.NewDashboard()
+	dashboard.Register(mux)
 	mux.Handle("/health/", health.Controller{Service: "config-service", Checks: map[string]health.Probe{
 		"configuration": func(context.Context) (map[string]any, error) {
 			if len(configs) != 8 {
@@ -60,6 +61,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	rpcState.Store(messaging.StartServer(ctx, "config-service", server.Handler))
+	go dashboard.Monitor(ctx)
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)

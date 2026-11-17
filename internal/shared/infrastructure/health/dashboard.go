@@ -37,12 +37,12 @@ type dashboardProbe struct {
 }
 
 type dashboardService struct {
-	ID       string         `json:"id"`
-	Name     string         `json:"name"`
-	Endpoint string         `json:"endpoint"`
-	Basic    bool           `json:"basic"`
-	Ready    dashboardProbe `json:"readiness"`
-	Live     dashboardProbe `json:"liveness"`
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	Endpoint  string             `json:"endpoint"`
+	Basic     bool               `json:"basic"`
+	Ready     dashboardProbe     `json:"readiness"`
+	Live      dashboardProbe     `json:"liveness"`
 	Instances []dashboardService `json:"instances,omitempty"`
 }
 
@@ -55,6 +55,9 @@ type dashboardSnapshot struct {
 type Dashboard struct {
 	client  *http.Client
 	targets []dashboardTarget
+	mu      sync.RWMutex
+	latest  dashboardSnapshot
+	samples []dashboardSample
 }
 
 func NewDashboard() *Dashboard {
@@ -72,13 +75,13 @@ func NewDashboard() *Dashboard {
 			{"gateway", "API Gateway", "http://gateway:8080", "/health", "/health", true},
 		},
 	}
- if os.Getenv("NOTIFICATIONS_REPLICA_ENABLED") == "true" {
-  dashboard.targets = append(dashboard.targets, dashboardTarget{
-   "notifications-replica", "Réplica", "http://notifications-replica:8080",
-   "/actuator/health/readiness", "/actuator/health/liveness", false,
-  })
- }
- return dashboard
+	if os.Getenv("NOTIFICATIONS_REPLICA_ENABLED") == "true" {
+		dashboard.targets = append(dashboard.targets, dashboardTarget{
+			"notifications-replica", "Réplica", "http://notifications-replica:8080",
+			"/actuator/health/readiness", "/actuator/health/liveness", false,
+		})
+	}
+	return dashboard
 }
 
 func (d *Dashboard) Register(mux *http.ServeMux) {
@@ -98,7 +101,11 @@ func (d *Dashboard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/status/services" {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(d.snapshot(r.Context()))
+		report := d.report(r.URL.Query().Get("history") == "1", time.Now().UTC())
+		if report.CheckedAt.IsZero() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+		_ = json.NewEncoder(w).Encode(report)
 		return
 	}
 	file, contentType := "dashboard.html", "text/html; charset=utf-8"
@@ -143,28 +150,28 @@ func (d *Dashboard) snapshot(ctx context.Context) dashboardSnapshot {
 		}()
 	}
 	services.Wait()
- // The Notifications card stays available when either instance is ready.
- if len(result.Services) > 0 && result.Services[len(result.Services)-1].ID == "notifications-replica" {
-  replica := result.Services[len(result.Services)-1]
-  result.Services = result.Services[:len(result.Services)-1]
-  for i := range result.Services {
-   primary := result.Services[i]
-   if primary.ID != "notifications" {
-    continue
-   }
-   primary.Name = "Principal"
-   aggregate := &result.Services[i]
-   aggregate.Instances = []dashboardService{primary, replica}
-   if !primary.healthy() && replica.healthy() {
-    aggregate.Ready, aggregate.Live = replica.Ready, replica.Live
-   }
-   if primary.healthy() != replica.healthy() {
-    result.Status = "DEGRADED"
-   }
-   break
-  }
- }
- for _, service := range result.Services {
+	// The Notifications card stays available when either instance is ready.
+	if len(result.Services) > 0 && result.Services[len(result.Services)-1].ID == "notifications-replica" {
+		replica := result.Services[len(result.Services)-1]
+		result.Services = result.Services[:len(result.Services)-1]
+		for i := range result.Services {
+			primary := result.Services[i]
+			if primary.ID != "notifications" {
+				continue
+			}
+			primary.ID, primary.Name = "notifications-primary", "Principal"
+			aggregate := &result.Services[i]
+			aggregate.Instances = []dashboardService{primary, replica}
+			if !primary.healthy() && replica.healthy() {
+				aggregate.Ready, aggregate.Live = replica.Ready, replica.Live
+			}
+			if primary.healthy() != replica.healthy() {
+				result.Status = "DEGRADED"
+			}
+			break
+		}
+	}
+	for _, service := range result.Services {
 		if !service.healthy() {
 			result.Status = "DOWN"
 		}
@@ -174,7 +181,7 @@ func (d *Dashboard) snapshot(ctx context.Context) dashboardSnapshot {
 }
 
 func (service dashboardService) healthy() bool {
- return service.Ready.Status == "UP" && service.Live.Status == "UP"
+	return service.Ready.Status == "UP" && service.Live.Status == "UP"
 }
 
 func (d *Dashboard) probe(ctx context.Context, url string, basic bool) (result dashboardProbe) {
