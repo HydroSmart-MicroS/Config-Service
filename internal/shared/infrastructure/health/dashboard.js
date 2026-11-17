@@ -37,6 +37,16 @@ function render(snapshot) {
       item.textContent = label + ' · ' + (labels[component.status] || labels.UNKNOWN) + ' · ' + Math.round(component.details.durationMs || 0) + ' ms';
       detailList.append(item);
     }
+    for (const instance of service.instances || []) {
+      const healthy = instance.readiness.status === 'UP' && instance.liveness.status === 'UP';
+      const chip = document.createElement('span');
+      chip.className = 'dependency ' + (healthy ? 'up' : 'down');
+      chip.textContent = instance.name + ': ' + (healthy ? 'Operativa' : 'Fuera de servicio');
+      dependencies.append(chip);
+    }
+    if (status === 'UP' && (service.instances || []).some(instance => instance.readiness.status !== 'UP' || instance.liveness.status !== 'UP')) {
+      badge.textContent = 'Operativo con una instancia';
+    }
     card.querySelector('.endpoint').textContent = 'Readiness: ' + service.endpoint;
     card.querySelector('.diagnostic').textContent = service.readiness.message || 'Todas las comprobaciones requeridas respondieron correctamente.';
     card.querySelector('.duration').textContent = 'Readiness · ' + service.readiness.durationMs + ' ms';
@@ -46,10 +56,10 @@ function render(snapshot) {
   }
   get('services').replaceChildren(cards);
   const healthy = snapshot.services.filter(service => service.readiness.status === 'UP' && service.liveness.status === 'UP').length;
-  const good = healthy === snapshot.services.length;
+  const good = snapshot.status === 'UP';
   document.querySelector('.overview').classList.toggle('issue', !good);
   document.querySelector('.overview').classList.remove('stale');
-  get('overall').textContent = good ? 'Todos los servicios responden' : 'Hay servicios que requieren atención';
+  get('overall').textContent = good ? 'Todos los servicios responden' : snapshot.status === 'DEGRADED' ? 'Notifications sigue operativo con una instancia' : 'Hay servicios que requieren atención';
   get('summary').textContent = healthy + ' de ' + snapshot.services.length + ' comprobaciones correctas · 8 servicios y API Gateway.';
   get('checked').textContent = new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(snapshot.checkedAt));
   get('error').hidden = true;
