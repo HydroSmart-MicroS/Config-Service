@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -98,5 +99,41 @@ func TestDashboardRoutesDoNotReplaceConfigurationOrFollowRedirects(t *testing.T)
 	probe := dashboard.probe(context.Background(), redirect.URL, false)
 	if probe.Status != "DOWN" || probe.HTTP != 302 || strings.Contains(probe.Message, "private-secret") {
 		t.Fatal("redirect was followed or leaked", probe)
+	}
+}
+
+
+func TestDashboardMQTTFailoverAndNotificationsTogether(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	active := "tcp://" + listener.Addr().String()
+	stopped, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inactive := "tcp://" + stopped.Addr().String()
+	stopped.Close()
+	dashboard := &Dashboard{targets: []dashboardTarget{
+		{"mqtt", "MQTT", inactive, "", "", true},
+		{"mqtt-replica", "Réplica", active, "", "", true},
+		{"notifications", "Notifications", active, "", "", true},
+		{"notifications-replica", "Réplica", inactive, "", "", true},
+	}}
+	snapshot := dashboard.snapshot(context.Background())
+	if snapshot.Status != "DEGRADED" || len(snapshot.Services) != 2 {
+		t.Fatal("Expected both services to survive a single failed instance", snapshot)
+	}
+	for _, service := range snapshot.Services {
+		if !service.healthy() || len(service.Instances) != 2 {
+			t.Fatal("Missing aggregate availability or instance diagnostics", service)
+		}
+	}
+	listener.Close()
+	snapshot = dashboard.snapshot(context.Background())
+	if snapshot.Status != "DOWN" {
+		t.Fatal("Both failed instances must be unavailable", snapshot)
 	}
 }

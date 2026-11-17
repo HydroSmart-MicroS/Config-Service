@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -74,6 +76,12 @@ func NewDashboard() *Dashboard {
 			{"config-service", "Config Service", "http://127.0.0.1:8080", "/health/ready", "/health/live", false},
 			{"gateway", "API Gateway", "http://gateway:8080", "/health", "/health", true},
 		},
+	}
+	if os.Getenv("MQTT_REPLICA_ENABLED") == "true" {
+		dashboard.targets = append(dashboard.targets,
+			dashboardTarget{"mqtt", "MQTT", "tcp://mosquitto:1883", "", "", true},
+			dashboardTarget{"mqtt-replica", "Réplica", "tcp://mosquitto-replica:1883", "", "", true},
+		)
 	}
 	if os.Getenv("NOTIFICATIONS_REPLICA_ENABLED") == "true" {
 		dashboard.targets = append(dashboard.targets, dashboardTarget{
@@ -150,26 +158,30 @@ func (d *Dashboard) snapshot(ctx context.Context) dashboardSnapshot {
 		}()
 	}
 	services.Wait()
-	// The Notifications card stays available when either instance is ready.
-	if len(result.Services) > 0 && result.Services[len(result.Services)-1].ID == "notifications-replica" {
-		replica := result.Services[len(result.Services)-1]
-		result.Services = result.Services[:len(result.Services)-1]
-		for i := range result.Services {
-			primary := result.Services[i]
-			if primary.ID != "notifications" {
-				continue
+	for _, name := range []string{"notifications", "mqtt"} {
+		primaryIndex, replicaIndex := -1, -1
+		for i, service := range result.Services {
+			if service.ID == name {
+				primaryIndex = i
 			}
-			primary.ID, primary.Name = "notifications-primary", "Principal"
-			aggregate := &result.Services[i]
-			aggregate.Instances = []dashboardService{primary, replica}
-			if !primary.healthy() && replica.healthy() {
-				aggregate.Ready, aggregate.Live = replica.Ready, replica.Live
+			if service.ID == name + "-replica" {
+				replicaIndex = i
 			}
-			if primary.healthy() != replica.healthy() {
-				result.Status = "DEGRADED"
-			}
-			break
 		}
+		if primaryIndex < 0 || replicaIndex < 0 {
+			continue
+		}
+		primary, replica := result.Services[primaryIndex], result.Services[replicaIndex]
+		primary.ID, primary.Name = name + "-primary", "Principal"
+		aggregate := &result.Services[primaryIndex]
+		aggregate.Instances = []dashboardService{primary, replica}
+		if !primary.healthy() && replica.healthy() {
+			aggregate.Ready, aggregate.Live = replica.Ready, replica.Live
+		}
+		if primary.healthy() != replica.healthy() {
+			result.Status = "DEGRADED"
+		}
+		result.Services = append(result.Services[:replicaIndex], result.Services[replicaIndex+1:]...)
 	}
 	for _, service := range result.Services {
 		if !service.healthy() {
@@ -188,6 +200,15 @@ func (d *Dashboard) probe(ctx context.Context, url string, basic bool) (result d
 	start := time.Now()
 	defer func() { result.DurationMS = time.Since(start).Milliseconds() }()
 	result.Status, result.Message = "UNREACHABLE", "No se pudo conectar o se agotó el tiempo de espera."
+	if strings.HasPrefix(url, "tcp://") {
+		dialer := net.Dialer{Timeout: 2 * time.Second}
+		connection, err := dialer.DialContext(ctx, "tcp", strings.TrimPrefix(url, "tcp://"))
+		if err == nil {
+			connection.Close()
+			result.Status, result.Message = "UP", "El puerto MQTT acepta conexiones TCP."
+		}
+		return
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return
