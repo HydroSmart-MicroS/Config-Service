@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -42,6 +43,7 @@ type dashboardService struct {
 	Basic    bool           `json:"basic"`
 	Ready    dashboardProbe `json:"readiness"`
 	Live     dashboardProbe `json:"liveness"`
+	Instances []dashboardService `json:"instances,omitempty"`
 }
 
 type dashboardSnapshot struct {
@@ -56,7 +58,7 @@ type Dashboard struct {
 }
 
 func NewDashboard() *Dashboard {
-	return &Dashboard{
+	dashboard := &Dashboard{
 		client: &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 		targets: []dashboardTarget{
 			{"identity", "Identity", "http://identity:8080", "/health/ready", "/health/live", false},
@@ -70,6 +72,13 @@ func NewDashboard() *Dashboard {
 			{"gateway", "API Gateway", "http://gateway:8080", "/health", "/health", true},
 		},
 	}
+ if os.Getenv("NOTIFICATIONS_REPLICA_ENABLED") == "true" {
+  dashboard.targets = append(dashboard.targets, dashboardTarget{
+   "notifications-replica", "Réplica", "http://notifications-replica:8080",
+   "/actuator/health/readiness", "/actuator/health/liveness", false,
+  })
+ }
+ return dashboard
 }
 
 func (d *Dashboard) Register(mux *http.ServeMux) {
@@ -134,13 +143,38 @@ func (d *Dashboard) snapshot(ctx context.Context) dashboardSnapshot {
 		}()
 	}
 	services.Wait()
-	for _, service := range result.Services {
-		if service.Ready.Status != "UP" || service.Live.Status != "UP" {
+ // The Notifications card stays available when either instance is ready.
+ if len(result.Services) > 0 && result.Services[len(result.Services)-1].ID == "notifications-replica" {
+  replica := result.Services[len(result.Services)-1]
+  result.Services = result.Services[:len(result.Services)-1]
+  for i := range result.Services {
+   primary := result.Services[i]
+   if primary.ID != "notifications" {
+    continue
+   }
+   primary.Name = "Principal"
+   aggregate := &result.Services[i]
+   aggregate.Instances = []dashboardService{primary, replica}
+   if !primary.healthy() && replica.healthy() {
+    aggregate.Ready, aggregate.Live = replica.Ready, replica.Live
+   }
+   if primary.healthy() != replica.healthy() {
+    result.Status = "DEGRADED"
+   }
+   break
+  }
+ }
+ for _, service := range result.Services {
+		if !service.healthy() {
 			result.Status = "DOWN"
 		}
 	}
 	result.CheckedAt = time.Now().UTC()
 	return result
+}
+
+func (service dashboardService) healthy() bool {
+ return service.Ready.Status == "UP" && service.Live.Status == "UP"
 }
 
 func (d *Dashboard) probe(ctx context.Context, url string, basic bool) (result dashboardProbe) {
